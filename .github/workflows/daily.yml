@@ -28,6 +28,7 @@ jobs:
 
       - name: Run Pulse bot
         env:
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}

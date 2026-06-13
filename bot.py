@@ -6,15 +6,29 @@ import requests
 from datetime import date
 
 def get_weather(city="Thiruvananthapuram"):
-    url = f"https://wttr.in/{city}?format=3"
-    
+    api_key = os.environ.get("WEATHER_API_KEY")
+    if not api_key:
+        print("WEATHER_API_KEY environment variable is missing!")
+        return "Weather unavailable (API Key missing)", None, False
+
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        return response.text.strip()
-    
-    except Exception:
-        return "Weather unavailable"
+        data = response.json()
+        
+        temp = data["main"]["temp"]
+        description = data["weather"][0]["description"]
+        main_weather = [w["main"].lower() for w in data["weather"]]
+        
+        # Check if rain/drizzle/thunderstorm is in the weather conditions
+        is_rain = any(any(r in cond for r in ["rain", "drizzle", "thunderstorm"]) for cond in main_weather)
+        
+        weather_text = f"{city}: {temp}°C, {description.capitalize()}"
+        return weather_text, temp, is_rain
+    except Exception as e:
+        print(f"Error fetching weather from OpenWeatherMap: {e}")
+        return "Weather unavailable", None, False
 
 def get_quote():
     url = "https://zenquotes.io/api/random"
@@ -57,26 +71,22 @@ def send_email(subject, body):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
-def build_summary():
-    today = date.today().strftime("%d %B %Y")
-
-    weather = get_weather()
+def run():
+    # Fetch weather and check alert criteria
+    weather_text, temp, is_rain = get_weather()
     quote = get_quote()
+    today = date.today().strftime("%d %B %Y")
 
     summary = f"""PULSE - Daily Summary
 
 {today}
 
 WEATHER
-{weather}
+{weather_text}
 
 TODAY'S QUOTE
 {quote}
 """
-    return summary
-
-def run():
-    summary = build_summary()
 
     print(summary)
 
@@ -85,9 +95,29 @@ def run():
 
     print("Pulse ran successfully.")
     
-    # Attempt to send email
-    today = date.today().strftime("%Y-%m-%d")
-    send_email(f"Pulse Daily Summary - {today}", summary)
+    # Check alert conditions
+    alerts = []
+    if temp is not None:
+        if temp > 35:
+            alerts.append(f"High Temperature Alert: Current temperature is {temp}°C (exceeds 35°C).")
+        if is_rain:
+            alerts.append("Rain Alert: Rain/drizzle/thunderstorm is currently observed or predicted.")
+
+    if alerts:
+        alert_msg = "\n".join(alerts)
+        subject = f"⚠️ PULSE WEATHER ALERT - {today}"
+        body = f"""Attention! A weather alert has been triggered:
+
+{alert_msg}
+
+Full Daily Summary:
+------------------
+{summary}
+"""
+        print("Alert condition met! Sending email...")
+        send_email(subject, body)
+    else:
+        print("No weather alerts triggered (Temperature <= 35°C and no rain). Skipping email alert.")
 
 if __name__ == "__main__":
     run()
